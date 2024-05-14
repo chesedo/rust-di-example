@@ -12,24 +12,24 @@ pub use print::Print;
 use print::{FilePrinter, RealPrinter};
 use worker::Worker;
 
-pub trait DependencyContainerTrait {
+pub trait DependencyContainer {
     fn worker(&self) -> Worker<impl Fetch, impl Print>;
 
     fn new_scope(&self) -> Self;
 }
 
-pub struct DependencyContainer {
+pub struct DependencyContainerImpl {
     file: Option<String>,
     printer: Rc<OnceCell<Box<dyn Print>>>,
-    fetcher: OnceCell<RealFetcher>,
+    fetcher: Rc<OnceCell<RealFetcher>>,
 }
 
-impl DependencyContainer {
+impl DependencyContainerImpl {
     pub fn new(file: Option<String>) -> Self {
         Self {
             file,
             printer: Rc::new(OnceCell::new()),
-            fetcher: OnceCell::new(),
+            fetcher: Rc::new(OnceCell::new()),
         }
     }
 
@@ -43,24 +43,24 @@ impl DependencyContainer {
     fn fetcher(&self) -> impl Fetch + '_ {
         let fetcher = self
             .fetcher
-            .get_or_init(|| self.fetcher_manual(self.date_time()));
+            .get_or_init(|| self.create_fetcher(self.date_time()));
 
         fetcher
     }
 
-    fn fetcher_manual(&self, date_time: DateTime<Utc>) -> RealFetcher {
+    fn create_fetcher(&self, date_time: DateTime<Utc>) -> RealFetcher {
         println!("Scoped Fetcher");
         RealFetcher::new(date_time)
     }
 
     // Singleton lifetime
     fn printer(&self) -> impl Print + '_ {
-        let printer = self.printer.get_or_init(|| self.printer_manual());
+        let printer = self.printer.get_or_init(|| self.create_printer());
 
         printer
     }
 
-    fn printer_manual(&self) -> Box<dyn Print> {
+    fn create_printer(&self) -> Box<dyn Print> {
         println!("Singleton Printer");
         if let Some(file) = &self.file {
             Box::new(FilePrinter::new(file.clone()))
@@ -70,7 +70,7 @@ impl DependencyContainer {
     }
 
     // Extra
-    fn worker_manual(
+    fn create_worker(
         &self,
         fetcher: impl Fetch,
         printer: impl Print,
@@ -79,22 +79,26 @@ impl DependencyContainer {
     }
 }
 
-impl DependencyContainerTrait for DependencyContainer {
+impl DependencyContainer for DependencyContainerImpl {
     fn worker(&self) -> Worker<impl Fetch, impl Print> {
-        self.worker_manual(self.fetcher(), self.printer())
+        self.create_worker(self.fetcher(), self.printer())
     }
 
     fn new_scope(&self) -> Self {
-        self.clone()
+        Self {
+            file: self.file.clone(),
+            printer: self.printer.clone(),
+            fetcher: Rc::new(OnceCell::new()),
+        }
     }
 }
 
-impl Clone for DependencyContainer {
+impl Clone for DependencyContainerImpl {
     fn clone(&self) -> Self {
         Self {
             file: self.file.clone(),
             printer: self.printer.clone(),
-            fetcher: OnceCell::new(),
+            fetcher: self.fetcher.clone(),
         }
     }
 }
@@ -103,7 +107,7 @@ impl Clone for DependencyContainer {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::{worker::Worker, DependencyContainerTrait, Fetch, Print};
+    use crate::{worker::Worker, DependencyContainer, Fetch, Print};
 
     struct MockFetcher;
 
@@ -124,11 +128,11 @@ mod tests {
     }
 
     #[derive(Clone)]
-    pub struct MockDependencyManager {
+    pub struct MockDependencyContainer {
         printer: Rc<RefCell<MockPrinter>>,
     }
 
-    impl DependencyContainerTrait for MockDependencyManager {
+    impl DependencyContainer for MockDependencyContainer {
         fn worker(&self) -> Worker<impl Fetch, impl Print> {
             let fetcher = MockFetcher;
             let printer = self.printer.clone();
@@ -143,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_worker() {
-        let mdm = MockDependencyManager {
+        let mdm = MockDependencyContainer {
             printer: Rc::new(RefCell::new(MockPrinter { data: None })),
         };
 

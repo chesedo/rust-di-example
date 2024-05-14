@@ -25,8 +25,11 @@ impl Fetch for RealFetcher {
     }
 }
 
-impl Fetch for &RealFetcher {
+impl<F> Fetch for &F
+where
+    F: Fetch,
+{
     fn fetch(&self) -> String {
-        self.date_time.to_rfc3339()
+        (*self).fetch()
     }
 }

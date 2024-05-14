@@ -1,7 +1,7 @@
-use di::{DependencyContainer, DependencyContainerTrait};
+use di::{DependencyContainer, DependencyContainerImpl};
 
 fn main() {
-    let dependency_container = DependencyContainer::new(None);
+    let dependency_container = DependencyContainerImpl::new(None);
 
     dependency_container.clone().worker().work();
 
@@ -18,7 +18,7 @@ fn main() {
         d2.worker().work();
 
         let d3 = dependency_container.new_scope();
-        d3.worker().work();
-        d3.worker().work();
+        d3.clone().worker().work();
+        d3.clone().worker().work();
     }
 }
