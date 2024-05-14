@@ -16,7 +16,8 @@ where
 
     pub fn work(&self) {
         let data = self.fetcher.fetch();
-        self.printer.print(&data);
+        let good_data = data.trim();
+        self.printer.print(good_data);
     }
 }
 
@@ -26,11 +27,11 @@ mod tests {
 
     use super::*;
 
-    struct MockFetcher;
+    struct MockFetcher(String);
 
     impl Fetch for MockFetcher {
         fn fetch(&self) -> String {
-            "MockFetcher".to_string()
+            self.0.clone()
         }
     }
 
@@ -46,12 +47,23 @@ mod tests {
 
     #[test]
     fn test_work() {
-        let fetcher = MockFetcher;
+        let fetcher = MockFetcher("MockFetcher".to_string());
         let printer = Rc::new(RefCell::new(MockPrinter { data: None }));
 
         let worker = Worker::new(fetcher, printer.clone());
         worker.work();
 
         assert_eq!(printer.borrow().data.as_ref().unwrap(), "MockFetcher");
+    }
+
+    #[test]
+    fn test_work_trims_spaces() {
+        let fetcher = MockFetcher(" padded data        ".to_string());
+        let printer = Rc::new(RefCell::new(MockPrinter { data: None }));
+
+        let worker = Worker::new(fetcher, printer.clone());
+        worker.work();
+
+        assert_eq!(printer.borrow().data.as_ref().unwrap(), "padded data");
     }
 }
